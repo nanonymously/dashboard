@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Xeno Marketing Task Tracker</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d24; --muted: #6b7280;
+    --border: #e5e7eb; --accent: #4f46e5; --accent-soft: #eef2ff;
+    --urgent: #dc2626; --high: #ea580c; --medium: #ca8a04; --low: #6b7280;
+    --done: #16a34a; --progress: #2563eb; --notstarted: #6b7280;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--text); padding: 24px 16px 80px; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  .toolbar input[type=search] { flex: 1; min-width: 180px; padding: 9px 12px;
+    border: 1px solid var(--border); border-radius: 8px; font-size: .9rem; background: var(--card); }
+  select { padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--card); font-size: .85rem; color: var(--text); }
+  .btn { padding: 9px 16px; border: none; border-radius: 8px; font-size: .85rem;
+    font-weight: 600; cursor: pointer; background: var(--accent); color: #fff; }
+  .btn.ghost { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+  .btn.danger { background: #fee2e2; color: var(--urgent); }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--card); font-size: .8rem; cursor: pointer; color: var(--muted); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tracker { margin-bottom: 26px; }
+  .tracker h2 { font-size: 1rem; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .tracker h2 .count { font-size: .75rem; color: var(--muted); font-weight: 400; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; cursor: pointer; transition: box-shadow .15s; }
+  .card:hover { box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+  .card .title { font-weight: 600; font-size: .9rem; margin-bottom: 8px; line-height: 1.35; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pill { font-size: .7rem; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .p-urgent { background: #fee2e2; color: var(--urgent); }
+  .p-high { background: #ffedd5; color: var(--high); }
+  .p-medium { background: #fef9c3; color: var(--medium); }
+  .p-low { background: #f3f4f6; color: var(--low); }
+  .s-done { background: #dcfce7; color: var(--done); }
+  .s-progress { background: #dbeafe; color: var(--progress); }
+  .s-other { background: #f3f4f6; color: var(--notstarted); }
+  .due, .owner { font-size: .75rem; color: var(--muted); }
+  .remarks { font-size: .78rem; color: var(--muted); margin-top: 8px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .banner { background: #fef3c7; border: 1px solid #fde68a; padding: 14px; border-radius: 10px;
+    margin-bottom: 18px; font-size: .85rem; }
+  .banner input { width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: .85rem; }
+  .status-msg { text-align: center; color: var(--muted); padding: 40px 0; font-size: .9rem; }
+  /* modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none;
+    align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 10; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: 14px; padding: 22px; width: 100%;
+    max-width: 520px; }
+  .modal h3 { font-size: 1.05rem; margin-bottom: 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: .75rem; font-weight: 600; color: var(--muted);
+    margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+  .field input, .field textarea, .field select { width: 100%; padding: 8px 10px;
+    border: 1px solid var(--border); border-radius: 8px; font-size: .88rem; font-family: inherit; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+  .modal-actions .danger { margin-right: auto; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff;
+    border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Xeno Marketing Task Tracker</h1>
+  <div class="sub" id="lastUpdated">Loading live data from Google Sheets…</div>
+
+  <div class="banner" id="setupBanner" style="display:none">
+    <strong>Setup needed:</strong> paste your Apps Script web app URL (ends in <code>/exec</code>) and press Enter.
+    <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/…/exec">
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Search tasks…">
+    <select id="priorityFilter">
+      <option value="">All priorities</option>
+      <option>Urgent</option><option>High</option><option>Medium</option><option>Low</option>
+    </select>
+    <label class="toggle"><input type="checkbox" id="showDone"> Show done</label>
+    <button class="btn" id="newTaskBtn">+ New Task</button>
+  </div>
+
+  <div class="chips" id="trackerChips"></div>
+  <div id="content"><div class="status-msg">Loading tasks…</div></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="modalTitle">Edit Task</h3>
+    <div id="modalFields"></div>
+    <div class="modal-actions">
+      <button class="btn danger" id="deleteBtn">Delete</button>
+      <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+// Paste your deployed Apps Script web app URL here (or via the setup banner):
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxOEesXTNhg3rj3uwLim4LzsS2Qgkw6a4PoHHrZqtS4kvxhc9u5Xk_-NEy9p05idwojZg/exec';
+var TOKEN = 'xeno-mktg-2026'; // must match TOKEN in Code.gs
+/* ========================================== */
+
+SCRIPT_URL = SCRIPT_URL || localStorage.getItem('scriptUrl') || '';
+
+var state = { trackers: [], activeTracker: '', search: '', priority: '', showDone: false, editing: null };
+
+var TITLE_KEYS = ['task', 'post / asset', 'topic', 'customer', 'account / customer'];
+function colIdx(headers, keys) {
+  var h = headers.map(function (x) { return x.trim().toLowerCase(); });
+  for (var i = 0; i < keys.length; i++) {
+    var j = h.indexOf(keys[i]);
+    if (j !== -1) return j;
+  }
+  return -1;
+}
+function findCol(headers, substr) {
+  var h = headers.map(function (x) { return x.trim().toLowerCase(); });
+  for (var i = 0; i < h.length; i++) if (h[i].indexOf(substr) !== -1) return i;
+  return -1;
+}
+function trackerCols(t) {
+  return {
+    title: colIdx(t.headers, TITLE_KEYS) !== -1 ? colIdx(t.headers, TITLE_KEYS) : findCol(t.headers, 'task'),
+    priority: findCol(t.headers, 'priority'),
+    status: findCol(t.headers, 'status'),
+    due: findCol(t.headers, 'due'),
+    owner: colIdx(t.headers, ['owner', 'task owner', 'owner (who)', 'content owner', 'email owner']),
+    remarks: findCol(t.headers, 'remark')
+  };
+}
+function isDone(s) { return /^(done|posted|completed?|approved)\s*$/i.test(s || ''); }
+function priClass(p) {
+  p = (p || '').trim().toLowerCase();
+  return p === 'urgent' ? 'p-urgent' : p === 'high' ? 'p-high' : p === 'medium' ? 'p-medium' : p === 'low' ? 'p-low' : '';
+}
+function statusClass(s) {
+  if (isDone(s)) return 's-done';
+  if (/progress|review|draft/i.test(s || '')) return 's-progress';
+  return 's-other';
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function load() {
+  if (!SCRIPT_URL) {
+    document.getElementById('setupBanner').style.display = 'block';
+    document.getElementById('content').innerHTML = '<div class="status-msg">Waiting for Apps Script URL…</div>';
+    return;
+  }
+  document.getElementById('setupBanner').style.display = 'none';
+  fetch(SCRIPT_URL).then(function (r) { return r.json(); }).then(function (data) {
+    if (!data.ok) throw new Error(data.error);
+    state.trackers = data.trackers.filter(function (t) { return t.rows.length || trackerCols(t).title !== -1; });
+    document.getElementById('lastUpdated').textContent =
+      'Live from Google Sheets · updated ' + new Date().toLocaleTimeString();
+    renderChips(); render();
+  }).catch(function (err) {
+    document.getElementById('content').innerHTML =
+      '<div class="status-msg">Could not load data: ' + esc(err.message) +
+      '.<br>Check the Apps Script URL and deployment access ("Anyone").</div>';
+  });
+}
+
+function renderChips() {
+  var el = document.getElementById('trackerChips');
+  var chips = ['<button class="chip' + (state.activeTracker === '' ? ' active' : '') + '" data-t="">All</button>'];
+  state.trackers.forEach(function (t) {
+    chips.push('<button class="chip' + (state.activeTracker === t.name ? ' active' : '') +
+      '" data-t="' + esc(t.name) + '">' + esc(t.name) + '</button>');
+  });
+  el.innerHTML = chips.join('');
+  el.querySelectorAll('.chip').forEach(function (c) {
+    c.onclick = function () { state.activeTracker = c.dataset.t; renderChips(); render(); };
+  });
+}
+
+function visibleRows(t) {
+  var cols = trackerCols(t);
+  return t.rows.filter(function (r) {
+    var status = cols.status !== -1 ? r.values[cols.status] : '';
+    if (!state.showDone && isDone(status)) return false;
+    if (state.priority && cols.priority !== -1 &&
+        (r.values[cols.priority] || '').trim().toLowerCase() !== state.priority.toLowerCase()) return false;
+    if (state.search) {
+      var hay = r.values.join(' ').toLowerCase();
+      if (hay.indexOf(state.search.toLowerCase()) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function render() {
+  var html = '';
+  state.trackers.forEach(function (t) {
+    if (state.activeTracker && t.name !== state.activeTracker) return;
+    var cols = trackerCols(t);
+    var rows = visibleRows(t);
+    if (!rows.length && state.activeTracker !== t.name) return;
+    html += '<div class="tracker"><h2>' + esc(t.name) +
+      ' <span class="count">' + rows.length + ' task' + (rows.length === 1 ? '' : 's') + '</span></h2><div class="cards">';
+    rows.forEach(function (r) {
+      var title = cols.title !== -1 ? r.values[cols.title] : r.values.filter(Boolean)[0];
+      var pri = cols.priority !== -1 ? r.values[cols.priority] : '';
+      var status = cols.status !== -1 ? r.values[cols.status] : '';
+      var due = cols.due !== -1 ? r.values[cols.due] : '';
+      var owner = cols.owner !== -1 ? r.values[cols.owner] : '';
+      var remarks = cols.remarks !== -1 ? r.values[cols.remarks] : '';
+      html += '<div class="card" data-tracker="' + esc(t.name) + '" data-row="' + r.row + '">' +
+        '<div class="title">' + esc(title || '(untitled)') + '</div><div class="meta">' +
+        (pri ? '<span class="pill ' + priClass(pri) + '">' + esc(pri) + '</span>' : '') +
+        (status ? '<span class="pill ' + statusClass(status) + '">' + esc(status) + '</span>' : '') +
+        (due ? '<span class="due">Due: ' + esc(due) + '</span>' : '') +
+        (owner ? '<span class="owner">· ' + esc(owner) + '</span>' : '') +
+        '</div>' + (remarks ? '<div class="remarks">' + esc(remarks) + '</div>' : '') + '</div>';
+    });
+    html += '</div></div>';
+  });
+  document.getElementById('content').innerHTML = html || '<div class="status-msg">No tasks match your filters.</div>';
+  document.querySelectorAll('.card').forEach(function (c) {
+    c.onclick = function () { openModal(c.dataset.tracker, parseInt(c.dataset.row, 10)); };
+  });
+}
+
+/* ---------- modal ---------- */
+function trackerByName(name) {
+  return state.trackers.filter(function (t) { return t.name === name; })[0];
+}
+function openModal(trackerName, row) {
+  var t = trackerByName(trackerName);
+  var r = row ? t.rows.filter(function (x) { return x.row === row; })[0] : null;
+  state.editing = { tracker: t, row: r };
+  document.getElementById('modalTitle').textContent = r ? 'Edit Task' : 'New Task — ' + t.name;
+  document.getElementById('deleteBtn').style.display = r ? '' : 'none';
+  var fields = '';
+  t.headers.forEach(function (h, i) {
+    if (!h) return;
+    var val = r ? (r.values[i] || '') : '';
+    var lh = h.trim().toLowerCase();
+    if (lh === 'priority') {
+      fields += '<div class="field"><label>' + esc(h) + '</label><select data-i="' + i + '">' +
+        ['', 'Urgent', 'High', 'Medium', 'Low'].map(function (o) {
+          return '<option' + (o.toLowerCase() === val.trim().toLowerCase() ? ' selected' : '') + '>' + o + '</option>';
+        }).join('') + '</select></div>';
+    } else if (lh.indexOf('remark') !== -1 || val.length > 80) {
+      fields += '<div class="field"><label>' + esc(h) + '</label><textarea data-i="' + i + '">' + esc(val) + '</textarea></div>';
+    } else {
+      fields += '<div class="field"><label>' + esc(h) + '</label><input data-i="' + i + '" value="' + esc(val) + '"' +
+        (lh.indexOf('status') !== -1 ? ' list="statusList"' : '') + '></div>';
+    }
+  });
+  fields += '<datalist id="statusList"><option>Not started</option><option>In Progress</option>' +
+    '<option>In review</option><option>Draft</option><option>Approved</option><option>Done</option><option>Posted</option></datalist>';
+  document.getElementById('modalFields').innerHTML = fields;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeModal() { document.getElementById('overlay').classList.remove('open'); state.editing = null; }
+
+function collectValues() {
+  var t = state.editing.tracker;
+  var values = new Array(t.headers.length).fill('');
+  if (state.editing.row) state.editing.row.values.forEach(function (v, i) { values[i] = v; });
+  document.querySelectorAll('#modalFields [data-i]').forEach(function (el) {
+    values[parseInt(el.dataset.i, 10)] = el.value;
+  });
+  return values;
+}
+
+function post(payload, btn) {
+  payload.token = TOKEN;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>'; }
+  return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { if (!d.ok) throw new Error(d.error); })
+    .finally(function () { if (btn) { btn.disabled = false; btn.textContent = btn.id === 'saveBtn' ? 'Save' : 'Delete'; } });
+}
+
+document.getElementById('saveBtn').onclick = function () {
+  var e = state.editing, t = e.tracker;
+  var payload = e.row
+    ? { action: 'update', sheetName: t.sheetName, row: e.row.row, values: collectValues() }
+    : { action: 'add', sheetName: t.sheetName,
+        afterRow: t.rows.length ? t.rows[t.rows.length - 1].row : t.headerRow,
+        values: collectValues() };
+  post(payload, this).then(function () { closeModal(); load(); })
+    .catch(function (err) { alert('Save failed: ' + err.message); });
+};
+document.getElementById('deleteBtn').onclick = function () {
+  if (!confirm('Delete this task from the sheet?')) return;
+  var e = state.editing;
+  post({ action: 'delete', sheetName: e.tracker.sheetName, row: e.row.row }, this)
+    .then(function () { closeModal(); load(); })
+    .catch(function (err) { alert('Delete failed: ' + err.message); });
+};
+document.getElementById('cancelBtn').onclick = closeModal;
+document.getElementById('overlay').onclick = function (ev) { if (ev.target === this) closeModal(); };
+
+document.getElementById('newTaskBtn').onclick = function () {
+  if (!state.trackers.length) return;
+  var name = state.activeTracker || state.trackers[0].name;
+  if (!state.activeTracker && state.trackers.length > 1) {
+    var pick = prompt('Add to which tracker?\n' + state.trackers.map(function (t, i) {
+      return (i + 1) + '. ' + t.name;
+    }).join('\n'), '1');
+    if (pick === null) return;
+    var idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || !state.trackers[idx]) return;
+    name = state.trackers[idx].name;
+  }
+  openModal(name, null);
+};
+
+document.getElementById('search').oninput = function () { state.search = this.value; render(); };
+document.getElementById('priorityFilter').onchange = function () { state.priority = this.value; render(); };
+document.getElementById('showDone').onchange = function () { state.showDone = this.checked; render(); };
+document.getElementById('scriptUrlInput').onkeydown = function (e) {
+  if (e.key === 'Enter' && this.value.trim()) {
+    SCRIPT_URL = this.value.trim();
+    localStorage.setItem('scriptUrl', SCRIPT_URL);
+    load();
+  }
+};
+
+load();
+</script>
+</body>
+</html>

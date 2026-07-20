@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Xeno Marketing Task Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1a1d24; --muted: #6b7280;
@@ -17,7 +18,11 @@
          background: var(--bg); color: var(--text); padding: 24px 16px 80px; }
   .wrap { max-width: 1100px; margin: 0 auto; }
   h1 { font-size: 1.5rem; margin-bottom: 4px; }
-  .sub { color: var(--muted); font-size: .85rem; margin-bottom: 20px; }
+  .sub { color: var(--muted); font-size: .85rem; margin-bottom: 16px; }
+  .views { display: flex; gap: 6px; margin-bottom: 16px; }
+  .view-btn { padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); font-size: .88rem; font-weight: 600; cursor: pointer; color: var(--muted); }
+  .view-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
   .toolbar input[type=search] { flex: 1; min-width: 180px; padding: 9px 12px;
     border: 1px solid var(--border); border-radius: 8px; font-size: .9rem; background: var(--card); }
@@ -57,12 +62,37 @@
   .banner input { width: 100%; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border);
     border-radius: 8px; font-size: .85rem; }
   .status-msg { text-align: center; color: var(--muted); padding: 40px 0; font-size: .9rem; }
+  /* dashboard */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .kpi .num { font-size: 1.8rem; font-weight: 700; }
+  .kpi .lbl { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+  .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px; margin-bottom: 18px; }
+  .section h2 { font-size: 1rem; margin-bottom: 12px; }
+  .section h3 { font-size: .85rem; color: var(--muted); margin: 14px 0 8px; }
+  .statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 12px; }
+  .stat .num { font-size: 1.3rem; font-weight: 700; }
+  .stat .lbl { font-size: .72rem; color: var(--muted); }
+  .chart-wrap { position: relative; height: 240px; margin-top: 10px; }
+  .table-wrap { overflow-x: auto; }
+  table.data { border-collapse: collapse; width: 100%; font-size: .8rem; }
+  table.data th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border);
+    color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+  table.data td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .hint { font-size: .8rem; color: var(--muted); background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+  .done-item { display: flex; gap: 10px; align-items: baseline; padding: 8px 0;
+    border-bottom: 1px solid var(--border); font-size: .87rem; flex-wrap: wrap; }
+  .done-item:last-child { border-bottom: none; }
+  .done-item .d-date { color: var(--muted); font-size: .75rem; min-width: 88px; }
+  .done-item .d-owner { color: var(--muted); font-size: .75rem; }
+  .filters { display: flex; gap: 6px; margin-bottom: 14px; }
   /* modal */
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none;
     align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 10; }
   .overlay.open { display: flex; }
-  .modal { background: var(--card); border-radius: 14px; padding: 22px; width: 100%;
-    max-width: 520px; }
+  .modal { background: var(--card); border-radius: 14px; padding: 22px; width: 100%; max-width: 520px; }
   .modal h3 { font-size: 1.05rem; margin-bottom: 16px; }
   .field { margin-bottom: 12px; }
   .field label { display: block; font-size: .75rem; font-weight: 600; color: var(--muted);
@@ -87,7 +117,13 @@
     <input id="scriptUrlInput" placeholder="https://script.google.com/macros/s/…/exec">
   </div>
 
-  <div class="toolbar">
+  <div class="views">
+    <button class="view-btn active" data-view="tasks">Tasks</button>
+    <button class="view-btn" data-view="dashboard">Dashboard</button>
+    <button class="view-btn" data-view="done">Done</button>
+  </div>
+
+  <div class="toolbar" id="toolbar">
     <input type="search" id="search" placeholder="Search tasks…">
     <select id="priorityFilter">
       <option value="">All priorities</option>
@@ -115,22 +151,21 @@
 
 <script>
 /* ================= CONFIG ================= */
-// Paste your deployed Apps Script web app URL here (or via the setup banner):
 var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxOEesXTNhg3rj3uwLim4LzsS2Qgkw6a4PoHHrZqtS4kvxhc9u5Xk_-NEy9p05idwojZg/exec';
 var TOKEN = 'xeno-mktg-2026'; // must match TOKEN in Code.gs
 /* ========================================== */
 
 SCRIPT_URL = SCRIPT_URL || localStorage.getItem('scriptUrl') || '';
 
-var state = { trackers: [], activeTracker: '', search: '', priority: '', showDone: false, editing: null };
+var state = { trackers: [], view: 'tasks', activeTracker: '', search: '', priority: '',
+              showDone: false, donePeriod: 7, editing: null };
+var followerChart = null;
 
+/* ---------- helpers ---------- */
 var TITLE_KEYS = ['task', 'post / asset', 'topic', 'customer', 'account / customer'];
 function colIdx(headers, keys) {
   var h = headers.map(function (x) { return x.trim().toLowerCase(); });
-  for (var i = 0; i < keys.length; i++) {
-    var j = h.indexOf(keys[i]);
-    if (j !== -1) return j;
-  }
+  for (var i = 0; i < keys.length; i++) { var j = h.indexOf(keys[i]); if (j !== -1) return j; }
   return -1;
 }
 function findCol(headers, substr) {
@@ -138,17 +173,30 @@ function findCol(headers, substr) {
   for (var i = 0; i < h.length; i++) if (h[i].indexOf(substr) !== -1) return i;
   return -1;
 }
+function allCols(headers, substr) {
+  var out = [], h = headers.map(function (x) { return x.trim().toLowerCase(); });
+  for (var i = 0; i < h.length; i++) if (h[i].indexOf(substr) !== -1) out.push(i);
+  return out;
+}
 function trackerCols(t) {
   return {
     title: colIdx(t.headers, TITLE_KEYS) !== -1 ? colIdx(t.headers, TITLE_KEYS) : findCol(t.headers, 'task'),
     priority: findCol(t.headers, 'priority'),
     status: findCol(t.headers, 'status'),
+    statusAll: allCols(t.headers, 'status'),
     due: findCol(t.headers, 'due'),
+    start: findCol(t.headers, 'start'),
+    dateCol: colIdx(t.headers, ['date']),
     owner: colIdx(t.headers, ['owner', 'task owner', 'owner (who)', 'content owner', 'email owner']),
-    remarks: findCol(t.headers, 'remark')
+    remarks: findCol(t.headers, 'remark'),
+    pillar: findCol(t.headers, 'pillar')
   };
 }
-function isDone(s) { return /^(done|posted|completed?|approved)\s*$/i.test(s || ''); }
+function isDone(s) { return /^(done|posted|complete|completed|approved)\s*$/i.test((s || '').trim()); }
+function rowIsDone(t, r) {
+  var cols = trackerCols(t);
+  return cols.statusAll.some(function (i) { return isDone(r.values[i]); });
+}
 function priClass(p) {
   p = (p || '').trim().toLowerCase();
   return p === 'urgent' ? 'p-urgent' : p === 'high' ? 'p-high' : p === 'medium' ? 'p-medium' : p === 'low' ? 'p-low' : '';
@@ -163,7 +211,42 @@ function esc(s) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
   });
 }
+var MONTHS = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11,
+  january:0,february:1,march:2,april:3,june:5,july:6,august:7,september:8,october:9,november:10,december:11 };
+function parseDate(s) {
+  if (!s) return null; s = String(s).trim(); if (!s || s === '—') return null;
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  m = s.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\.?,?\s*(\d{2,4})?/); // "15 July 26", "13th July"
+  if (m && MONTHS[m[2].toLowerCase()] != null) {
+    var y = m[3] ? +m[3] : 2026; if (y < 100) y += 2000; if (y < 1000) y = 2026;
+    return new Date(y, MONTHS[m[2].toLowerCase()], +m[1]);
+  }
+  m = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2})(?:\s*[\/\-]\s*\d{1,2})?\s*,?\s*(\d{2,4})?/); // "Jul 7, 2026", "Aug 14/15"
+  if (m && MONTHS[m[1].toLowerCase()] != null) {
+    var y2 = m[3] ? +m[3] : 2026; if (y2 < 100) y2 += 2000; if (y2 < 1000) y2 = 2026;
+    return new Date(y2, MONTHS[m[1].toLowerCase()], +m[2]);
+  }
+  return null;
+}
+function rowDate(t, r) {
+  var c = trackerCols(t);
+  return parseDate(c.due !== -1 && r.values[c.due]) ||
+         parseDate(c.dateCol !== -1 && r.values[c.dateCol]) ||
+         parseDate(c.start !== -1 && r.values[c.start]) || null;
+}
+function fmtDate(d) {
+  return d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+}
+function num(v) {
+  var n = parseFloat(String(v || '').replace(/,/g, '')); return isNaN(n) ? 0 : n;
+}
+/* tracker classifiers */
+function isLeadsTracker(t) { return findCol(t.headers, 'open rate') !== -1 || /lead/i.test(t.name); }
+function isStatsTracker(t) { return findCol(t.headers, 'follower') !== -1; }
+function isCalendarTracker(t) { return findCol(t.headers, 'post / asset') !== -1; }
 
+/* ---------- data ---------- */
 function load() {
   if (!SCRIPT_URL) {
     document.getElementById('setupBanner').style.display = 'block';
@@ -184,6 +267,16 @@ function load() {
   });
 }
 
+/* ---------- views ---------- */
+function render() {
+  var tasksUi = state.view === 'tasks';
+  document.getElementById('toolbar').style.display = tasksUi ? 'flex' : 'none';
+  document.getElementById('trackerChips').style.display = tasksUi ? 'flex' : 'none';
+  if (state.view === 'tasks') renderTasks();
+  else if (state.view === 'dashboard') renderDashboard();
+  else renderDone();
+}
+
 function renderChips() {
   var el = document.getElementById('trackerChips');
   var chips = ['<button class="chip' + (state.activeTracker === '' ? ' active' : '') + '" data-t="">All</button>'];
@@ -200,19 +293,17 @@ function renderChips() {
 function visibleRows(t) {
   var cols = trackerCols(t);
   return t.rows.filter(function (r) {
-    var status = cols.status !== -1 ? r.values[cols.status] : '';
-    if (!state.showDone && isDone(status)) return false;
+    if (!state.showDone && rowIsDone(t, r)) return false;
     if (state.priority && cols.priority !== -1 &&
         (r.values[cols.priority] || '').trim().toLowerCase() !== state.priority.toLowerCase()) return false;
     if (state.search) {
-      var hay = r.values.join(' ').toLowerCase();
-      if (hay.indexOf(state.search.toLowerCase()) === -1) return false;
+      if (r.values.join(' ').toLowerCase().indexOf(state.search.toLowerCase()) === -1) return false;
     }
     return true;
   });
 }
 
-function render() {
+function renderTasks() {
   var html = '';
   state.trackers.forEach(function (t) {
     if (state.activeTracker && t.name !== state.activeTracker) return;
@@ -241,6 +332,180 @@ function render() {
   document.getElementById('content').innerHTML = html || '<div class="status-msg">No tasks match your filters.</div>';
   document.querySelectorAll('.card').forEach(function (c) {
     c.onclick = function () { openModal(c.dataset.tracker, parseInt(c.dataset.row, 10)); };
+  });
+}
+
+/* ---------- dashboard ---------- */
+function doneItems() {
+  var items = [];
+  state.trackers.forEach(function (t) {
+    if (isLeadsTracker(t) || isStatsTracker(t)) return;
+    var cols = trackerCols(t);
+    t.rows.forEach(function (r) {
+      if (!rowIsDone(t, r)) return;
+      var title = cols.title !== -1 ? r.values[cols.title] : r.values.filter(Boolean)[0];
+      if (!title) return;
+      items.push({ tracker: t.name, title: title, date: rowDate(t, r),
+        owner: cols.owner !== -1 ? r.values[cols.owner] : '',
+        remarks: cols.remarks !== -1 ? r.values[cols.remarks] : '' });
+    });
+  });
+  return items;
+}
+function withinDays(d, days) {
+  if (!d) return false;
+  var now = new Date(); var diff = now - d;
+  return diff >= -86400000 && diff <= days * 86400000;
+}
+
+function renderDashboard() {
+  var done = doneItems();
+  var done7 = done.filter(function (i) { return withinDays(i.date, 7); });
+  var calendars = state.trackers.filter(isCalendarTracker);
+  var posted = [], upcoming = [];
+  calendars.forEach(function (t) {
+    var cols = trackerCols(t);
+    t.rows.forEach(function (r) {
+      var title = cols.title !== -1 ? r.values[cols.title] : '';
+      if (!title) return;
+      var d = rowDate(t, r);
+      var item = { title: title, date: d, pillar: cols.pillar !== -1 ? r.values[cols.pillar] : '', t: t, r: r };
+      if (rowIsDone(t, r)) posted.push(item);
+      else if (d && d >= new Date()) upcoming.push(item);
+    });
+  });
+  upcoming.sort(function (a, b) { return a.date - b.date; });
+
+  /* engagement sums from any impressions/likes/comments/engagement columns on calendars */
+  var engagement = { Impressions: 0, Likes: 0, Comments: 0, Engagements: 0 }, engFound = false;
+  calendars.forEach(function (t) {
+    ['impression', 'likes', 'comments', 'engagement'].forEach(function (key, ki) {
+      var c = findCol(t.headers, key);
+      if (c === -1) return; engFound = true;
+      var label = ['Impressions', 'Likes', 'Comments', 'Engagements'][ki];
+      t.rows.forEach(function (r) { engagement[label] += num(r.values[c]); });
+    });
+  });
+
+  var leads = state.trackers.filter(isLeadsTracker)[0];
+  var stats = state.trackers.filter(isStatsTracker)[0];
+
+  var html = '';
+  /* KPIs */
+  html += '<div class="kpis">' +
+    kpi(done7.length, 'Done in last 7 days') +
+    kpi(done.length, 'Done — all time') +
+    kpi(posted.length, 'Posts published') +
+    (leads ? kpi(leads.rows.length, 'Leads in pipeline') : '') +
+    '</div>';
+
+  /* Social media */
+  html += '<div class="section"><h2>Social Media</h2>';
+  var byPillar = {};
+  posted.forEach(function (p) { var k = (p.pillar || 'Other').trim() || 'Other'; byPillar[k] = (byPillar[k] || 0) + 1; });
+  html += '<div class="statgrid">' + stat(posted.length, 'Posts published') +
+    Object.keys(byPillar).map(function (k) { return stat(byPillar[k], k + ' posts'); }).join('') + '</div>';
+  if (engFound) {
+    html += '<h3>Engagement (from calendar columns)</h3><div class="statgrid">' +
+      Object.keys(engagement).filter(function (k) { return engagement[k] > 0; })
+        .map(function (k) { return stat(engagement[k].toLocaleString(), k); }).join('') + '</div>';
+  } else {
+    html += '<div class="hint" style="margin-top:12px">To track engagement per post, add <b>Impressions</b>, <b>Likes</b>, <b>Comments</b> columns to the social calendar tab in the sheet — they\'ll be summed here automatically.</div>';
+  }
+  if (stats) {
+    html += '<h3>Follower growth</h3><div class="chart-wrap"><canvas id="followerChart"></canvas></div>';
+  } else {
+    html += '<div class="hint" style="margin-top:12px">To chart follower growth, add a tab named <b>Social Stats</b> with headers: <b>Date | Followers | Impressions | Engagements | Remarks</b> and log one row each week.</div>';
+  }
+  if (upcoming.length) {
+    html += '<h3>Coming up</h3>';
+    upcoming.slice(0, 5).forEach(function (p) {
+      html += '<div class="done-item"><span class="d-date">' + fmtDate(p.date) + '</span><span>' + esc(p.title) + '</span>' +
+        (p.pillar ? '<span class="pill s-other">' + esc(p.pillar) + '</span>' : '') + '</div>';
+    });
+  }
+  html += '</div>';
+
+  /* Leads */
+  if (leads) {
+    html += '<div class="section"><h2>Marketing Leads</h2><div class="table-wrap">' + leadsTable(leads) + '</div></div>';
+  }
+
+  document.getElementById('content').innerHTML = html;
+  if (stats) drawFollowerChart(stats);
+}
+function kpi(n, l) { return '<div class="kpi"><div class="num">' + n + '</div><div class="lbl">' + l + '</div></div>'; }
+function stat(n, l) { return '<div class="stat"><div class="num">' + n + '</div><div class="lbl">' + esc(l) + '</div></div>'; }
+
+function leadsTable(t) {
+  var keep = [];
+  t.headers.forEach(function (h, i) {
+    if (!h) return;
+    if (/priority|phone|domains/i.test(h)) return; // noise columns
+    keep.push(i);
+  });
+  var html = '<table class="data"><thead><tr>' +
+    keep.map(function (i) { return '<th>' + esc(t.headers[i]) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  t.rows.forEach(function (r) {
+    html += '<tr>' + keep.map(function (i) { return '<td>' + esc(r.values[i]) + '</td>'; }).join('') + '</tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function drawFollowerChart(t) {
+  var dCol = colIdx(t.headers, ['date']), fCol = findCol(t.headers, 'follower');
+  if (dCol === -1 || fCol === -1) return;
+  var pts = t.rows.map(function (r) { return { d: parseDate(r.values[dCol]), f: num(r.values[fCol]) }; })
+    .filter(function (p) { return p.d && p.f; })
+    .sort(function (a, b) { return a.d - b.d; });
+  if (!pts.length) return;
+  var ctx = document.getElementById('followerChart');
+  if (!ctx || typeof Chart === 'undefined') return;
+  if (followerChart) followerChart.destroy();
+  followerChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: pts.map(function (p) { return fmtDate(p.d); }),
+      datasets: [{ label: 'Followers', data: pts.map(function (p) { return p.f; }),
+        borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.08)', fill: true, tension: .3 }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } }
+  });
+}
+
+/* ---------- done view ---------- */
+function renderDone() {
+  var items = doneItems();
+  var filtered = state.donePeriod === 0 ? items :
+    items.filter(function (i) { return withinDays(i.date, state.donePeriod); });
+  var undated = state.donePeriod === 0 ? [] : items.filter(function (i) { return !i.date; });
+
+  var html = '<div class="filters">' +
+    [[7, 'Last 7 days'], [30, 'Last 30 days'], [0, 'All time']].map(function (p) {
+      return '<button class="chip' + (state.donePeriod === p[0] ? ' active' : '') + '" data-p="' + p[0] + '">' + p[1] + '</button>';
+    }).join('') + '</div>';
+
+  html += '<div class="kpis">' + kpi(filtered.length, state.donePeriod === 0 ? 'Done — all time' : 'Done in period') + '</div>';
+
+  var byTracker = {};
+  filtered.forEach(function (i) { (byTracker[i.tracker] = byTracker[i.tracker] || []).push(i); });
+  Object.keys(byTracker).forEach(function (name) {
+    html += '<div class="section"><h2>' + esc(name) + ' <span class="count" style="font-size:.75rem;color:var(--muted);font-weight:400">' +
+      byTracker[name].length + '</span></h2>';
+    byTracker[name].sort(function (a, b) { return (b.date || 0) - (a.date || 0); }).forEach(function (i) {
+      html += '<div class="done-item"><span class="d-date">' + (fmtDate(i.date) || '—') + '</span>' +
+        '<span>' + esc(i.title) + '</span>' +
+        (i.owner ? '<span class="d-owner">· ' + esc(i.owner) + '</span>' : '') + '</div>';
+    });
+    html += '</div>';
+  });
+  if (!Object.keys(byTracker).length) html += '<div class="status-msg">Nothing marked done in this period.</div>';
+
+  if (undated.length) {
+    html += '<div class="hint">' + undated.length + ' done task(s) have no date and are only shown under "All time". Add due/start dates in the sheet to place them in weekly summaries.</div>';
+  }
+  document.getElementById('content').innerHTML = html;
+  document.querySelectorAll('.filters .chip').forEach(function (c) {
+    c.onclick = function () { state.donePeriod = +c.dataset.p; renderDone(); };
   });
 }
 
@@ -332,6 +597,13 @@ document.getElementById('newTaskBtn').onclick = function () {
   openModal(name, null);
 };
 
+document.querySelectorAll('.view-btn').forEach(function (b) {
+  b.onclick = function () {
+    state.view = b.dataset.view;
+    document.querySelectorAll('.view-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
+    render();
+  };
+});
 document.getElementById('search').oninput = function () { state.search = this.value; render(); };
 document.getElementById('priorityFilter').onchange = function () { state.priority = this.value; render(); };
 document.getElementById('showDone').onchange = function () { state.showDone = this.checked; render(); };
